@@ -41,31 +41,10 @@ jobs:
           mkdir -p ./output
           cp -r ./target/release/stub-installer.exe ./output/floorp-stub.installer.exe
 
-      - name: Publish Unsigned Installer 🎁
-        id: publish-unsigned-installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: floorp-stub-installer-unsigned
-          path: output/floorp-stub.installer.exe
-          retention-days: 30
-
-      - name: Sign Installer 🖊️
-        id: Sign-installer
-        uses: signpath/github-action-submit-signing-request@v1.1
-        with:
-          api-token: "${{ secrets.SIGNPATH_API_TOKEN }}"
-          organization-id: "3b13ba3b-8062-4df7-a4a6-217a5ec352c4"
-          project-slug: "Floorp"
-          signing-policy-slug: "release-signing"
-          artifact-configuration-slug: "stub-v2-signing"
-          github-artifact-id: "${{ steps.publish-unsigned-installer.outputs.artifact-id }}"
-          wait-for-completion-timeout-in-seconds: 7200
-          wait-for-completion: true
-          output-artifact-directory: output/signed_installer
-
-      - name: Upload final installer artifacts
+      # Upload unsigned installer directly as final artifact
+      - name: Upload final installer artifacts 🎁
         uses: actions/upload-artifact@v4
         with:
           name: floorp-stub-installer
-          path: ./output/signed_installer/floorp-stub.installer.exe
+          path: ./output/floorp-stub.installer.exe
           retention-days: 30
