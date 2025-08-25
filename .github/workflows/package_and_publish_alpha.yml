@@ -2,65 +2,120 @@ name: "(A) |α| Package and Publish Alpha"
 
 on:
   workflow_dispatch:
-    inputs:
-      runtime_windows_artifact_workflow_run_id:
-        description: "The workflow run ID for the Windows runtime artifact"
-        required: false
-        type: string
-      runtime_linux_artifact_workflow_run_id:
-        description: "The workflow run ID for the Linux runtime artifact"
-        required: false
-        type: string
-      runtime_mac_artifact_workflow_run_id:
-        description: "The workflow run ID for the macOS runtime artifact"
-        required: false
-        type: string
-      runtime_linux_aarch64_artifact_workflow_run_id:
-        description: "The workflow run ID for the Linux aarch64 runtime artifact"
-        required: false
-        type: string
+
 permissions:
   contents: write
 
 jobs:
-  package-windows:
-    uses: ./.github/workflows/package.yml
-    with:
-      platform: Windows-x64
-      runtime_artifact_workflow_run_id: ${{ inputs.runtime_windows_artifact_workflow_run_id }}
-      beta: true
-    secrets: inherit
+  # Build Windows installer
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  package-linux:
-    uses: ./.github/workflows/package.yml
-    with:
-      platform: Linux-x64
-      runtime_artifact_workflow_run_id: ${{ inputs.runtime_linux_artifact_workflow_run_id }}
-      beta: true
-    secrets: inherit
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
 
-  package-macos:
-    uses: ./.github/workflows/package.yml
-    with:
-      platform: macOS-x64
-      runtime_artifact_workflow_run_id: ${{ inputs.runtime_mac_artifact_workflow_run_id }}
-      beta: true
-    secrets: inherit
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
 
-  package-linux-aarch64:
-    uses: ./.github/workflows/package.yml
-    with:
-      platform: Linux-aarch64
-      runtime_artifact_workflow_run_id: ${{ inputs.runtime_linux_aarch64_artifact_workflow_run_id }}
-      beta: true
-    secrets: inherit
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
 
-  publishs:
-    needs:
-      [package-windows, package-linux, package-macos, package-linux-aarch64]
-    uses: ./.github/workflows/publish_alpha.yml
-    with:
-      win_runtime_artifact_workflow_call: ${{ github.run_id }}
-      linux_runtime_artifact_workflow_call: ${{ github.run_id }}
-      mac_runtime_artifact_workflow_call: ${{ github.run_id }}
-      linux_aarch64_runtime_artifact_workflow_call: ${{ github.run_id }}
+      - name: Install dependencies
+        run: |
+          cd src/installers/stub-win64-installer
+          pnpm install
+
+      - name: Build installer
+        run: deno task installer-win64-stub-build
+
+      - name: Copy installer to output
+        run: |
+          mkdir -p output
+          cp -r ./target/release/stub-installer.exe ./output/floorp-win64.installer.exe
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: floorp-win64-installer
+          path: output/floorp-win64.installer.exe
+          retention-days: 30
+
+  # Example: Linux build
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Add your Linux build steps here
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: floorp-linux-installer
+          path: ./output/floorp-linux.installer
+          retention-days: 30
+
+  # Example: macOS build
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Add your macOS build steps here
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: floorp-macos-installer
+          path: ./output/floorp-macos.installer
+          retention-days: 30
+
+  # Example: Linux ARM64 build
+  build-linux-aarch64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Add your Linux ARM64 build steps here
+
+      - name: Upload Linux ARM64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: floorp-linux-aarch64-installer
+          path: ./output/floorp-linux-aarch64.installer
+          retention-days: 30
+
+  # Publish job (runs after all builds succeed)
+  publish:
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-linux, build-macos, build-linux-aarch64]
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./dist
+
+      - name: List downloaded files
+        run: ls -R ./dist
+
+      # Example publish step (GitHub Release)
+      - name: Create GitHub Release (Alpha)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: alpha-${{ github.run_number }}
+          name: Alpha Build ${{ github.run_number }}
+          draft: false
+          prerelease: true
+          files: ./dist/**/*
